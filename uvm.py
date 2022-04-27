@@ -3,8 +3,11 @@
 from bcc import BPF
 from bcc.utils import printb
 
+# Adjust to your liking
+nvidia_dkms = "/usr/src/nvidia-510.54"
+
 # load BPF program
-b = BPF(src_file="uvm.c", cflags=["-I/usr/src/nvidia-510.54/common/inc", "-I/usr/src/nvidia-510.54/"])
+b = BPF(src_file="uvm.c", cflags=[f"-I{nvidia_dkms}/common/inc", f"-I{nvidia_dkms}"])
 
 b.attach_kprobe(event="uvm_api_migrate", fn_name="uvm_api_migrate")
 
@@ -15,7 +18,6 @@ print("%-18s %-6s %-6s %-6s" % ("TIME(s)","PID", "BASE", "LENGTH"))
 
 # process event
 start = 0
-
 
 def print_migration(cpu, data, size):
     global start
