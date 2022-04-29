@@ -5,16 +5,60 @@ using NVUVM
 const uvm = UVM()
 const uvm_tools = UVMTools()
 
+# Important! We need to open the device we care about
+# Otherwise we get EPERM on registration
+const device_fd = UVM("/dev/nvidia0")
+
 # 1. Initialize UVM driver on this process
 initialize(uvm)
+api_pageable_mem_access(uvm)
 
-# TODO: Figure out target device id
+function uuid_to_device(uuid)
+    NVUVM.NvProcessorUuid((reverse(reinterpret(UInt8, [uuid]))...,))
+end
 
 # Produced via nvidia-smi -L: d9b28d2d-828e-cae5-626b-dc354d9af00f:
-const device_uuid = NVUVM.NvProcessorUuid((
-    0x0f, 0xf0, 0x9a, 0x4d, 0x35, 0xdc, 0x6b, 0x62,
-    0xe5, 0xca, 0x8e, 0x82, 0x2d, 0x8d, 0xb2, 0xd9))
+# Or CUDA.uuid(device())
+let device_uuid = uuid_to_device(Base.UUID("d9b28d2d-828e-cae5-626b-dc354d9af00f"))
+    register_gpu(uvm, device_uuid, #=rmCtrlFd=#-1)
+end
 
+# 2. Enumerate device uuids
+uuids = api_tools_get_processor_uuid_table(uvm)
+if length(uuids) == 1
+    error("No GPU available")
+end
 
-# 2. Setup uvm_tools
+const device_uuid = last(uuids)
+
+# 2. Setup uvm_tools, for now we are setting up counters and not events
 control_buffer = init_event_tracker(uvm_tools, uvm, device_uuid)
+
+# const counters = NVUVM.UVM_COUNTER_NAME_FLAG_GPU_PAGE_FAULT_COUNT | NVUVM.UVM_COUNTER_NAME_FLAG_CPU_PAGE_FAULT_COUNT 
+
+const counters = NVUVM.UVM_COUNTER_NAME_FLAG_BYTES_XFER_HTD | NVUVM.UVM_COUNTER_NAME_FLAG_BYTES_XFER_DTH |
+                 NVUVM.UVM_COUNTER_NAME_FLAG_CPU_PAGE_FAULT_COUNT | NVUVM.UVM_COUNTER_NAME_FLAG_PREFETCH_BYTES_XFER_HTD |
+                 NVUVM.UVM_COUNTER_NAME_FLAG_PREFETCH_BYTES_XFER_DTH | NVUVM.UVM_COUNTER_NAME_FLAG_GPU_PAGE_FAULT_COUNT
+tools_enable_counters(uvm_tools, counters)
+
+
+# TODO poll?
+
+println("Press enter to exit...")
+try
+    readline()
+catch err
+    if !(err isa InterruptException)
+        rethrow(err)
+    end
+end
+
+function read_counters(control_buffer)
+    copy(Base.unsafe_wrap(Array{UInt64}, control_buffer, NVUVM.UVM_TOTAL_COUNTERS, own=false))
+end
+
+@show read_counters(control_buffer)
+
+tools_disable_counters(uvm_tools, counters)
+
+# TODO deinitialize uvm_tools & uvm
