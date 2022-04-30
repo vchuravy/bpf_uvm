@@ -42,6 +42,11 @@ const counters = NVUVM.UVM_COUNTER_NAME_FLAG_BYTES_XFER_HTD | NVUVM.UVM_COUNTER_
 tools_enable_counters(uvm_tools, counters)
 
 
+# test
+# for counter in (0, 1, 2, 7, 8, 9)
+#     NVUVM.test_increment_tools_counter(uvm, 1, counter, device_uuid, 1+counter)
+# end
+
 # TODO poll?
 
 println("Press enter to exit...")

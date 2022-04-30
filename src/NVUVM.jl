@@ -213,4 +213,21 @@ module NVUVM
         nvioctl(fd, UVM_TOOLS_DISABLE_COUNTERS, UVM_TOOLS_DISABLE_COUNTERS_PARAMS(flags, 0))        
         return nothing
     end
+
+    # Test (needs `sudo rmmod nvidia_uvm ; sudo modprobe nvidia_uvm uvm_enable_builtin_tests=1`)
+    UVM_IOCTL_BASE(i) = i
+    UVM_TEST_IOCTL_BASE(i) = UVM_IOCTL_BASE(200 + i)
+    const UVM_TEST_INCREMENT_TOOLS_COUNTER = UVM_TEST_IOCTL_BASE(29)
+    struct UVM_TEST_INCREMENT_TOOLS_COUNTER_PARAMS
+        amount::UInt64 # amount to increment
+        counter::UInt32 # name of counter
+        processor::NvProcessorUuid
+        count::UInt32 # number of times to increment
+        rmStatus::UInt32
+    end
+
+    function test_increment_tools_counter(fd, amount, counter, processor, count)
+        nvioctl(fd, UVM_TEST_INCREMENT_TOOLS_COUNTER, UVM_TEST_INCREMENT_TOOLS_COUNTER_PARAMS(amount, counter, processor, count, 0))        
+        return nothing
+    end
 end
