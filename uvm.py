@@ -2,6 +2,7 @@
 
 from bcc import BPF
 from bcc.utils import printb
+import ctypes as ct
 
 # Adjust to your liking
 nvidia_dkms = "/usr/src/nvidia-510.54"
@@ -9,39 +10,73 @@ nvidia_dkms = "/usr/src/nvidia-510.54"
 # load BPF program
 b = BPF(src_file="uvm.c", cflags=[f"-I{nvidia_dkms}/common/inc", f"-I{nvidia_dkms}"])
 
-# b.attach_kprobe(event="uvm_api_migrate", fn_name="uvm_api_migrate")
-b.attach_kprobe(event="uvm_api_register_gpu", fn_name="uvm_register_gpu")
+b.attach_kprobe(event="uvm_perf_event_notify", fn_name="uvm_perf_event_notify")
 
-# header
-# header
-print("Tracing... Hit Ctrl-C to end.")
-# print("%-18s %-6s %-6s %-6s" % ("TIME(s)","PID", "BASE", "LENGTH"))
+def transfer_mode(m):
+    if m == 1:
+        return "Move"
+    elif m == 2:
+        return "Copy"
+    else:
+        return "Unknown"
 
-# process event
-start = 0
+
+def cause(c):
+    if c == 0:
+        return "Replayable Fault"
+    elif c == 1:
+        return "Non Replayable Fault"
+    elif c == 2:
+        return "Access Counter"
+    elif c == 3:
+        return "Prefetch"
+    elif c == 4:
+        return "Eviction"
+    elif c == 5:
+        return "API Tools"
+    elif c == 6:
+        return "API Migrate"
+    elif c == 7:
+        return "API Set Range Group"
+    elif c == 8:
+        return "API Hint"
+    else:
+        return "Unknown"
+
+# define output data structure in Python
+class Migration(ct.Structure):
+    _fields_ = [("bytes", ct.c_uint64),
+                ("transfer_mode", ct.c_int),
+                ("cause", ct.c_int)]
+
 
 def print_migration(cpu, data, size):
-    global start
-    migration = b["migrations"].event(data)
-    if start == 0:
-        start = migration.ts
-    time_s = (float(migration.ts - start)) / 1000000000
+    m = ct.cast(data, ct.POINTER(Migration)).contents
     printb(
-        b"%-18.9f %-6d %-6d %-6d"
-        % (time_s, migration.pid, migration.base, migration.length)
+        b"Migration: %d bytes Transfer Mode: %b Cause: %b"
+        % (m.bytes, transfer_mode(m.transfer_mode).encode(), cause(m.cause).encode())
     )
 
-def print_registration(cpu, data, size):
-    r = b["registrations"].event(data)
+def print_gpu_fault(cpu, data, size):
+    fault = b["gpu_faults"].event(data)
     printb(
-        b"%d %d %d"
-        % (r.rmCtrlFd, r.hClient, r.hSmcPartRef)
+        b"GPU fault on %-6d"
+        % (fault.proc_id)
     )
 
+def print_cpu_fault(cpu, data, size):
+    fault = b["cpu_faults"].event(data)
+    printb(
+        b"CPU fault on %-6d"
+        % (fault.proc_id)
+    )
 
+print("Tracing... Hit Ctrl-C to end.")
 # loop with callback to print_event
-# b["migrations"].open_perf_buffer(print_migration)
-b["registrations"].open_perf_buffer(print_registration)
+b["migrations"].open_perf_buffer(print_migration)
+b["gpu_faults"].open_perf_buffer(print_gpu_fault)
+b["cpu_faults"].open_perf_buffer(print_cpu_fault)
+# b["revocations"].open_perf_buffer(print_revocations)
 while 1:
     try:
         b.perf_buffer_poll()
