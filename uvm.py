@@ -45,30 +45,40 @@ def cause(c):
 
 # define output data structure in Python
 class Migration(ct.Structure):
-    _fields_ = [("bytes", ct.c_uint64),
-                ("transfer_mode", ct.c_int),
-                ("cause", ct.c_int)]
+    _fields_ = [
+        ("dst", ct.c_uint32),
+        ("src", ct.c_uint32),
+        ("address", ct.c_uint64),
+        ("bytes", ct.c_uint64),
+        ("transfer_mode", ct.c_int),
+        ("cause", ct.c_int)]
 
 
 def print_migration(cpu, data, size):
     m = ct.cast(data, ct.POINTER(Migration)).contents
     printb(
-        b"Migration: %d bytes Transfer Mode: %b Cause: %b"
-        % (m.bytes, transfer_mode(m.transfer_mode).encode(), cause(m.cause).encode())
+        b"Migration from proc %-6d to %-6d (va: 0x%x, %d bytes, mode: %b, cause: %b)"
+        % (m.src, m.dst, m.address, m.bytes, transfer_mode(m.transfer_mode).encode(), cause(m.cause).encode())
     )
 
 def print_gpu_fault(cpu, data, size):
     fault = b["gpu_faults"].event(data)
-    printb(
-        b"GPU fault on %-6d"
-        % (fault.proc_id)
-    )
+    if fault.is_duplicated or fault.filtered:
+        printb(
+            b"Duplicated GPU fault on proc %-6d (va: 0x%x)"
+            % (fault.proc_id, fault.fault_va)
+        )
+    else:
+        printb(
+            b"GPU fault on proc %-6d (va: 0x%x)"
+            % (fault.proc_id, fault.fault_va)
+        )
 
 def print_cpu_fault(cpu, data, size):
     fault = b["cpu_faults"].event(data)
     printb(
-        b"CPU fault on proc %-6d (write: %x, va: %x, pc: %x)"
-        % (fault.proc_id, fault.is_write, fault.fault_va, fault.pc)
+        b"CPU fault on proc %-6d (write: %r, va: 0x%x, pc: 0x%x)"
+        % (fault.proc_id, bool(fault.is_write), fault.fault_va, fault.pc)
     )
 
 print("Tracing... Hit Ctrl-C to end.")

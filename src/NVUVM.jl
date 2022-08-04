@@ -97,7 +97,7 @@ module NVUVM
 
     const UVM_PAGEABLE_MEM_ACCESS = 39
     struct UVM_PAGEABLE_MEM_ACCESS_PARAMS
-        pageableMemAccess::UInt8 # In
+        pageableMemAccess::UInt8 # Out
         rmStatus::UInt32          # Out
     end
 

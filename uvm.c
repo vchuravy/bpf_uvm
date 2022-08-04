@@ -342,6 +342,9 @@ struct uvm_fault_buffer_entry_struct
 
 typedef struct uvm_fault_buffer_entry_struct uvm_fault_buffer_entry_t;
 
+// typedef struct uvm_make_resident_context_struct uvm_make_resident_context_t;
+typedef struct void uvm_make_resident_context_t;
+
 typedef union
 {
     struct
@@ -437,7 +440,7 @@ typedef union
 
         // Pointer to the make_resident context from the va_block_context
         // struct used by the operation that triggered the make_resident call.
-        void *make_resident_context;
+        uvm_make_resident_context_t *make_resident_context;
     } migration;
 
     struct
@@ -468,6 +471,9 @@ BPF_PERF_OUTPUT(cpu_faults);
 BPF_PERF_OUTPUT(revocations);
 
 struct migration_t {
+    u32 dst;
+    u32 src;
+    u64 address;
     u64 bytes;
     uvm_va_block_transfer_mode_t transfer_mode;
     uvm_make_resident_cause_t cause;
@@ -475,13 +481,18 @@ struct migration_t {
 
 struct gpu_fault_t {
     u32 proc_id;
+
+    // u32 batch_id; 
+    char is_duplicated;
+    char filtered;
+    u64 fault_va;
 };
 
 struct cpu_fault_t {
     u32 proc_id;
 
-    u64 fault_va;
     char is_write;
+    u64 fault_va;
     u64 pc;
 };
 
@@ -490,6 +501,9 @@ int uvm_perf_event_notify(struct pt_regs *ctx, void *va_space_events, uvm_perf_e
 {
     if (event_id == UVM_PERF_EVENT_MIGRATION) {
         struct migration_t m = {};
+        m.dst = event_data->migration.dst.val;
+        m.src = event_data->migration.src.val;
+        m.address = event_data->migration.address;
         m.bytes = event_data->migration.bytes;
         m.transfer_mode = event_data->migration.transfer_mode;
         m.cause = event_data->migration.cause;
@@ -500,6 +514,7 @@ int uvm_perf_event_notify(struct pt_regs *ctx, void *va_space_events, uvm_perf_e
         if (UVM_ID_IS_CPU(proc_id)) {
             struct cpu_fault_t f = {};
             f.proc_id = proc_id.val;
+
             f.fault_va = event_data->fault.cpu.fault_va;
             f.is_write = event_data->fault.cpu.is_write;
             f.pc = event_data->fault.cpu.pc;
@@ -508,6 +523,13 @@ int uvm_perf_event_notify(struct pt_regs *ctx, void *va_space_events, uvm_perf_e
         } else if (UVM_ID_IS_GPU(proc_id)) {
             struct gpu_fault_t f = {};
             f.proc_id = proc_id.val;
+
+            f.is_duplicated = event_data->fault.gpu.is_duplicate;
+            // f.batch_id = event_data->fault.gpu.batch_id;
+
+            uvm_fault_buffer_entry_t buffer = *(event_data->fault.gpu.buffer_entry);
+            f.filtered = buffer.filtered;
+            f.fault_va = buffer.fault_address;
 
             gpu_faults.perf_submit(ctx, &f, sizeof(f));
         }
