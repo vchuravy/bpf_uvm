@@ -67,8 +67,8 @@ def print_gpu_fault(cpu, data, size):
 def print_cpu_fault(cpu, data, size):
     fault = b["cpu_faults"].event(data)
     printb(
-        b"CPU fault on %-6d"
-        % (fault.proc_id)
+        b"CPU fault on proc %-6d (write: %x, va: %x, pc: %x)"
+        % (fault.proc_id, fault.is_write, fault.fault_va, fault.pc)
     )
 
 print("Tracing... Hit Ctrl-C to end.")

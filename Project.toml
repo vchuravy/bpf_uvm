@@ -2,3 +2,6 @@ name = "NVUVM"
 uuid = "a5355581-ea70-45a1-9e97-616ee4ead78c"
 authors = ["Valentin Churavy <v.churavy@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
